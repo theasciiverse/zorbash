@@ -6,6 +6,7 @@
 #include "my_game.hpp"
 #include "my_sdl_event.hpp"
 #include "my_sdl_proto.hpp"
+#include "my_terminal.hpp"
 #include "my_tests.hpp"
 #include "my_ui.hpp"
 #include "my_wid_console.hpp"
@@ -175,6 +176,9 @@ void sdl_loop(void)
       //
       // Read events
       //
+      if (g_opt_terminal) {
+        terminal_poll();
+      }
       SDL_PumpEvents();
 
       sdl.wheel_x = 0;

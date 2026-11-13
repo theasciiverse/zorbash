@@ -12,6 +12,7 @@
 #include "my_globals_extra.hpp"
 #include "my_sdl_event.hpp"
 #include "my_string.hpp"
+#include "my_terminal.hpp"
 #include "my_ui.hpp"
 #include "my_unicode.hpp"
 #include "my_wid.hpp"
@@ -1055,6 +1056,16 @@ void ascii_display(void)
 {
   TRACE_NO_INDENT();
   mouse_found = false;
+
+  if (g_opt_terminal) {
+    int mx;
+    int my;
+    terminal_mouse_state(&mx, &my);
+    pixel_to_ascii(&mx, &my);
+    ascii.mouse_at = point(mx, my);
+    terminal_display();
+    return;
+  }
 
   gl_enter_2d_mode(game->config.ui_pix_width, game->config.ui_pix_height);
   blit_init();

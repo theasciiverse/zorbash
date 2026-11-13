@@ -28,6 +28,7 @@
 #include "my_ramdisk.hpp"
 #include "my_room.hpp"
 #include "my_sdl_proto.hpp"
+#include "my_terminal.hpp"
 #include "my_sound.hpp"
 #include "my_string.hpp"
 #include "my_wid_actionbar.hpp"
@@ -479,6 +480,7 @@ static void usage(void)
   CON("Commonly used options:");
   CON(" --ascii                     -- Enable ascii graphics.");
   CON(" --pixelart                  -- Enable pixelart graphics.");
+  CON(" --terminal                  -- Play in this terminal (ascii, no window).");
   CON(" --player-name 'disco bob'   -- Set your name.");
   CON(" --seed <name/number>        -- Set the random dungeon seed.");
   CON(" ");
@@ -528,6 +530,13 @@ static void parse_args(int argc, char *argv[])
 
   for (i = 1; i < argc; i++) {
     if (! strcasecmp(argv[ i ], "--ascii") || ! strcasecmp(argv[ i ], "-ascii")) {
+      g_opt_ascii          = true;
+      g_opt_ascii_override = true;
+      continue;
+    }
+
+    if (! strcasecmp(argv[ i ], "--terminal") || ! strcasecmp(argv[ i ], "-terminal")) {
+      g_opt_terminal       = true;
       g_opt_ascii          = true;
       g_opt_ascii_override = true;
       continue;
@@ -784,6 +793,13 @@ int main(int argc, char *argv[])
   {
     TRACE_NO_INDENT();
     parse_args(argc, argv);
+  }
+
+  if (g_opt_terminal) {
+    if (! terminal_init()) {
+      fprintf(stderr, "zorbash: --terminal needs a terminal on stdin and stdout\n");
+      exit(1);
+    }
   }
 
   {
@@ -1183,6 +1199,10 @@ loop:
   config_gfx_vsync_update();
 
   g_opt_no_slow_log_flush = false;
+
+  if (g_opt_terminal) {
+    terminal_start();
+  }
 
   TRACE_NO_INDENT();
   sdl_loop();

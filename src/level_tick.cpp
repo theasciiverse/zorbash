@@ -41,7 +41,7 @@ void Level::handle_input_events(void)
   // Trying to scroll the map?
   //
   const float    map_move_scroll_delta = 0.2;
-  const uint8_t *state                 = SDL_GetKeyboardState(nullptr);
+  const uint8_t *state                 = sdl_keyboard_state();
 
   if (state[ sdlk_to_scancode(game->config.key_map_left) ]) {
     map_wanted_at.x -= map_move_scroll_delta;

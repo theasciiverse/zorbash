@@ -167,7 +167,7 @@ static void __attribute__((noinline)) sdl_event_mousemotion(SDL_Keysym *key, SDL
   //
   // Catch up with the latest mouse position; and dampen identical events.
   //
-  SDL_GetMouseState(&mx, &my);
+  sdl_mouse_state(&mx, &my);
   if ((mx == last_mx) && (my == last_my)) {
     return;
   }
@@ -477,7 +477,7 @@ static void sdl_key_repeat_events_(void)
     return;
   }
 
-  const uint8_t *state = SDL_GetKeyboardState(nullptr);
+  const uint8_t *state = sdl_keyboard_state();
 
   bool up    = state[ sdlk_to_scancode(game->config.key_move_up) ];
   bool down  = state[ sdlk_to_scancode(game->config.key_move_down) ];

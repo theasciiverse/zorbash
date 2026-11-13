@@ -3538,7 +3538,7 @@ static uint8_t wid_scroll_trough_mouse_motion(Widp w, int x, int y, int relx, in
   int dx;
   int dy;
 
-  if ((SDL_BUTTON(SDL_BUTTON_LEFT) & SDL_GetMouseState(0, 0)) || wheely || wheelx) {
+  if ((SDL_BUTTON(SDL_BUTTON_LEFT) & sdl_mouse_state(0, 0)) || wheely || wheelx) {
 
     dy = rely ? rely : -wheely;
 
@@ -3881,7 +3881,7 @@ void wid_update_mouse(void)
   int x;
   int y;
 
-  SDL_GetMouseState(&x, &y);
+  sdl_mouse_state(&x, &y);
 
   wid_mouse_motion(x, y, 0, 0, 0, 0);
 }
@@ -5192,7 +5192,7 @@ void wid_mouse_motion(int x, int y, int relx, int rely, int wheelx, int wheely)
   //
   // To avoid lag, just grab the current mouse position.
   //
-  SDL_GetMouseState(&x, &y);
+  sdl_mouse_state(&x, &y);
 
   //
   // Map to ascii

@@ -63,4 +63,7 @@ void sdl_screenshot(void);
 void sdl_show_keyboard(void);
 void sdl_tick(void);
 
+const uint8_t *sdl_keyboard_state(void);
+uint32_t       sdl_mouse_state(int *x, int *y);
+
 #endif

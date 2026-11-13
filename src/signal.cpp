@@ -2,6 +2,7 @@
 // Copyright goblinhack@gmail.com
 //
 
+#include "my_terminal.hpp"
 #include "my_backtrace.hpp"
 #include "my_game.hpp"
 #include "my_globals_extra.hpp"
@@ -152,6 +153,7 @@ void common_error_handler(std::string &tech_support)
 
 void segv_handler(int sig)
 {
+  terminal_fini();
   std::string tech_support = "Sorry, a crash has occurred!";
   common_error_handler(tech_support);
 
@@ -176,6 +178,7 @@ void error_handler(const std::string &error_msg)
 
 void ctrlc_handler(int sig)
 {
+  terminal_fini();
   TRACE_AND_INDENT();
   fprintf(MY_STDERR, "Interrupted!!!");
   backtrace_dump();

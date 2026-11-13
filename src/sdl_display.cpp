@@ -2,6 +2,7 @@
 // Copyright goblinhack@gmail.com
 //
 
+#include "my_terminal.hpp"
 #include "my_color_defs.hpp"
 #include "my_game.hpp"
 #include "my_sdl_event.hpp"
@@ -18,6 +19,14 @@
 
 void sdl_display(void)
 {
+  if (g_opt_terminal) {
+    //
+    // ascii_display wrote the frame to the terminal; just yield a little
+    //
+    SDL_Delay(2);
+    return;
+  }
+
   {
     blit_fbo_bind(FBO_FINAL);
     glClear(GL_COLOR_BUFFER_BIT);

@@ -2,6 +2,7 @@
 // Copyright goblinhack@gmail.com
 //
 
+#include "my_terminal.hpp"
 #include "my_array_bounds_check.hpp"
 #include "my_color_defs.hpp"
 #include "my_command.hpp"
@@ -336,6 +337,25 @@ uint8_t sdl_init(void)
   return true;
 }
 
+//
+// SDL's keyboard and mouse state, or the terminal's in terminal mode
+//
+const uint8_t *sdl_keyboard_state(void)
+{
+  if (g_opt_terminal) {
+    return terminal_keyboard_state();
+  }
+  return SDL_GetKeyboardState(nullptr);
+}
+
+uint32_t sdl_mouse_state(int *x, int *y)
+{
+  if (g_opt_terminal) {
+    return terminal_mouse_state(x, y);
+  }
+  return SDL_GetMouseState(x, y);
+}
+
 int sdl_get_mouse(void)
 {
   TRACE_NO_INDENT();
@@ -345,7 +365,7 @@ int sdl_get_mouse(void)
   }
 
   int x, y;
-  int button = SDL_GetMouseState(&x, &y);
+  int button = sdl_mouse_state(&x, &y);
 
   if (! x && ! y) {
     return button;
@@ -836,6 +856,17 @@ void sdl_flush_display(bool force)
 
 void config_game_gfx_update(void)
 {
+  if (g_opt_terminal) {
+    //
+    // The offscreen window is sized so one ascii cell is a whole number of
+    // pixels, with the ascii grid the size of the terminal.
+    //
+    game->config.config_pix_width  = terminal_cols() * TERMINAL_CELL_PIX_WIDTH;
+    game->config.config_pix_height = terminal_rows() * TERMINAL_CELL_PIX_HEIGHT;
+    game->config.window_pix_width  = game->config.config_pix_width;
+    game->config.window_pix_height = game->config.config_pix_height;
+  }
+
   if (g_opt_ascii) {
     LOG("SDL: Ascii mode undate");
     font_ui = font_ascii;
@@ -1025,6 +1056,14 @@ void config_game_gfx_update(void)
   //
   game->config.ascii_gl_width  = ceil(((float) game->config.ui_pix_width) / ((float) TERM_WIDTH));
   game->config.ascii_gl_height = ceil(((float) game->config.ui_pix_height) / ((float) TERM_HEIGHT));
+
+  if (g_opt_terminal) {
+    TERM_WIDTH                   = terminal_cols();
+    TERM_HEIGHT                  = terminal_rows();
+    game->config.ascii_gl_width  = std::max(1, (int) (game->config.ui_pix_width / TERM_WIDTH));
+    game->config.ascii_gl_height = std::max(1, (int) (game->config.ui_pix_height / TERM_HEIGHT));
+    LOG("SDL: - terminal term size   : %dx%d", TERM_WIDTH, TERM_HEIGHT);
+  }
 
   //
   // If we overflow the screen, try to cut a few rows and columns off
