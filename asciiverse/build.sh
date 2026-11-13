@@ -4,7 +4,7 @@
 # sound and tune built into the one binary.
 #
 # The build is upstream's own (./RUNME --rel), pointed at:
-#   - SDL2 and SDL2_mixer built from source into av-build/ and linked in
+#   - SDL2 and SDL2_mixer built from source into avbuild/ and linked in
 #     statically, SDL2 without video (the game draws in the terminal and uses
 #     SDL for its events, timers and sound), SDL2_mixer with its own Ogg
 #     Vorbis decoder (the music is Ogg, the sounds WAV). SDL still loads the
@@ -16,7 +16,7 @@
 #     binary needs no OpenGL library: terminal mode never calls one. macOS
 #     links the system's OpenGL framework, present on every Mac and likewise
 #     never called. Run on the runner with CC_ARCH set to x86_64 or arm64.
-# A small sdl2-config (av-build/bin) tells RUNME where SDL is and adds
+# A small sdl2-config (avbuild/bin) tells RUNME where SDL is and adds
 # -DZORBASH_TERMINAL_ONLY.
 set -eu
 SDL2=2.32.10
@@ -30,7 +30,9 @@ if [ -f /etc/os-release ] && grep -q '^ID=ubuntu' /etc/os-release && [ "$(id -u)
 fi
 
 root=$(pwd)
-deps="$root/av-build"
+# no "-" in this path: RUNME reads the include folder out of
+# sdl2-config with a pattern that has no "-" in it
+deps="$root/avbuild"
 prefix="$deps/prefix"
 mkdir -p "$deps/bin" "$deps/lib"
 arch=${CC_ARCH:+-DCMAKE_OSX_ARCHITECTURES=$CC_ARCH}

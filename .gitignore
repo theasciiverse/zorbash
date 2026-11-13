@@ -109,3 +109,6 @@ zorbash.exe.dSYM
 zorbash.pdb
 zorbash.sh
 Zorbash-*-windows-x64-installer.exe
+avbuild/
+stage/
+dist/

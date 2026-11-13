@@ -1,0 +1,42 @@
+# System packages (.deb, .rpm, Arch) for Zorbash, built by nfpm from the same
+# Linux build as the av archive (glibc, so no Alpine .apk). The release
+# workflow sets VERSION, RELEASE (our packaging release) and ARCH (amd64 or
+# arm64).
+#
+# One binary in /usr/bin; it plays in the terminal it is started from.
+# No .desktop file on purpose: av is the one place titles are started from,
+# so Asciiverse packages never add menu entries.
+name: zorbash
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+release: ${RELEASE}
+section: games
+priority: optional
+maintainer: Asciiverse <packages@asciiverse.sh>
+vendor: Asciiverse
+homepage: https://github.com/theasciiverse/zorbash
+license: GPL-3.0-only
+description: |
+  A roguelike in the terminal: collect the crystals, confront Zorbash.
+  Fight through dungeons, sewers, swamps, ice caves and lava, with
+  hundreds of monsters, weapons, wands and potions, and a dungeon seed
+  you can share.
+  Zorbash by Neil McGill (goblinhack), in its terminal edition, packaged
+  by Asciiverse.
+contents:
+  - src: stage/zorbash
+    dst: /usr/bin/zorbash
+    file_info: { mode: 0755 }
+  - src: stage/LICENSE
+    dst: /usr/share/doc/zorbash/copyright
+    file_info: { mode: 0644 }
+  - src: stage/README.md
+    dst: /usr/share/doc/zorbash/README.md
+    file_info: { mode: 0644 }
+  - src: stage/PATCHES.md
+    dst: /usr/share/doc/zorbash/PATCHES.md
+    file_info: { mode: 0644 }
+  - src: stage/UPSTREAM.md
+    dst: /usr/share/doc/zorbash/UPSTREAM.md
+    file_info: { mode: 0644 }
