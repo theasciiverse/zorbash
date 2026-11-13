@@ -76,7 +76,7 @@ cat > "$deps/bin/sdl2-config" <<EOF
 #!/bin/sh
 case "\$1" in
   --cflags) echo "$sdl_cflags -DZORBASH_TERMINAL_ONLY${CC_ARCH:+ -arch $CC_ARCH}" ;;
-  --libs) echo "$glstub$sdl_libs${CC_ARCH:+ -arch $CC_ARCH}" ;;
+  --libs) echo "$glstub $sdl_libs${CC_ARCH:+ -arch $CC_ARCH}" ;;
   *) exit 1 ;;
 esac
 EOF
