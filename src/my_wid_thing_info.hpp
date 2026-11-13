@@ -1,0 +1,15 @@
+//
+// Copyright goblinhack@gmail.com
+//
+
+#pragma once
+
+void    wid_thing_info_fini(const std::string &why);
+uint8_t wid_thing_info_init(void);
+
+#include "my_wid_popup.hpp"
+
+//
+// Global widgets.
+//
+extern std::list< WidPopup * > wid_thing_info_window;

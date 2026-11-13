@@ -1,0 +1,3 @@
+//
+// Copyright goblinhack@gmail.com
+//

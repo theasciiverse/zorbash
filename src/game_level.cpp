@@ -1,0 +1,43 @@
+//
+// Copyright goblinhack@gmail.com
+//
+
+#include "my_array_bounds_check.hpp"
+#include "my_game.hpp"
+
+static std::recursive_mutex init_mutex;
+
+bool Game::init_level(point3d world_at, point grid_at, int difficulty_depth, int dungeon_walk_order_level_no)
+{
+  DBG("Game init level %d,%d,%d", world_at.x, world_at.y, world_at.z);
+  TRACE_AND_INDENT();
+
+  //
+  // Make sure init has occurred.
+  //
+  init_mutex.lock();
+  if (jump_paths.empty()) {
+    init();
+  }
+  init_mutex.unlock();
+
+  if (world_at.z >= LEVELS_DEEP) {
+    LOG("Cannot create new level at: %d,%d,%d, too deep", world_at.x, world_at.y, world_at.z);
+    return false;
+  }
+
+  auto l = get(world.levels, world_at.x, world_at.y, world_at.z);
+  if (! l) {
+    DBG("Create new level at: %d,%d,%d", world_at.x, world_at.y, world_at.z);
+    world.new_level_at(world_at, grid_at, difficulty_depth, dungeon_walk_order_level_no);
+    l = get(world.levels, world_at.x, world_at.y, world_at.z);
+    if (! l) {
+      ERR("No level created at: %d,%d,%d", game->current_level.x, game->current_level.y, game->current_level.z);
+      return false;
+    }
+  } else {
+    LOG("Level already exists: %d,%d,%d", world_at.x, world_at.y, world_at.z);
+  }
+  l->is_created = true;
+  return true;
+}

@@ -1,0 +1,53 @@
+//
+// Copyright goblinhack@gmail.com
+//
+
+#include "my_level.hpp"
+#include "my_string.hpp"
+#include "my_thing.hpp"
+
+bool Thing::beckon(Thingp target)
+{
+  TRACE_NO_INDENT();
+
+  auto points = ::line(curr_at, target->curr_at, 0 /* max_elems*/);
+
+  if (points.size() < 2) {
+    dbg("Beckon: %s too close", target->to_short_string().c_str());
+    return false;
+  }
+
+  target->wake("beckoned");
+
+  if (level->is_spell_of_holding_barrier(target->curr_at)) {
+    //
+    // Unable to beckon as shielded?
+    //
+    if (target->is_player()) {
+      target->msg("%%fg=green$You are shielded from beckoning.%%fg=reset$");
+    } else if (target->is_monst() && is_player()) {
+      msg("%%fg=yellow$%s is shielded from beckoning.%%fg=reset$", capitalize_first(target->text_the()).c_str());
+    }
+
+    dbg("Beckon: %s is held in a magic barrier", target->to_short_string().c_str());
+    return false;
+  }
+
+  auto dest = points[ points.size() - 2 ];
+
+  if (target->is_able_to_fall_over()) {
+    TRACE_AND_INDENT();
+    target->log("knocked over");
+    target->dead("falls over");
+  }
+
+  //
+  // Shove in reverse!
+  //
+  dbg("Beckon: %s", target->to_short_string().c_str());
+  ShoveOptions shove_options;
+  shove_options.force = true;
+  try_to_shove(target, dest - target->curr_at, shove_options);
+
+  return true;
+}
