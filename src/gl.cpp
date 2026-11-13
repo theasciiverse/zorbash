@@ -1353,6 +1353,7 @@ void gl_push(float **P, float *p_end, uint8_t first_vertex, float tex_left, floa
              uint8_t r2, uint8_t g2, uint8_t b2, uint8_t a2, uint8_t r3, uint8_t g3, uint8_t b3, uint8_t a3,
              uint8_t r4, uint8_t g4, uint8_t b4, uint8_t a4)
 {
+  GL_TERMINAL_SKIP();
   float *p = *P;
 
   if (unlikely(p >= p_end)) {
@@ -1407,6 +1408,7 @@ void gl_push(float **P, float *p_end, uint8_t first_vertex, float tex_left, floa
              uint8_t b1, uint8_t a1, uint8_t r2, uint8_t g2, uint8_t b2, uint8_t a2, uint8_t r3, uint8_t g3,
              uint8_t b3, uint8_t a3, uint8_t r4, uint8_t g4, uint8_t b4, uint8_t a4)
 {
+  GL_TERMINAL_SKIP();
   point tl(left, top);
   point tr(right, top);
   point bl(left, bottom);
@@ -1421,6 +1423,7 @@ static bool first_vertex;
 void blit(int tex, float texMinX, float texMinY, float texMaxX, float texMaxY, GLushort left, GLushort top,
           GLushort right, GLushort bottom)
 {
+  GL_TERMINAL_SKIP();
   if (unlikely(! buf_tex)) {
     blit_init();
     first_vertex = true;
