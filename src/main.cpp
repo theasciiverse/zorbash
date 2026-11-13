@@ -483,6 +483,7 @@ static void usage(void)
   CON(" --terminal                  -- Play in this terminal (ascii, no window).");
   CON(" --player-name 'disco bob'   -- Set your name.");
   CON(" --seed <name/number>        -- Set the random dungeon seed.");
+  CON(" --robot-delay <ms>          -- Robo mode waits this long between steps.");
   CON(" ");
   CON("Less commonly used options:");
   CON(" --monochrome                -- Enable monochrome graphics.");
@@ -547,6 +548,14 @@ static void parse_args(int argc, char *argv[])
       g_opt_terminal       = true;
       g_opt_ascii          = true;
       g_opt_ascii_override = true;
+      continue;
+    }
+
+    if (! strcasecmp(argv[ i ], "--robot-delay") || ! strcasecmp(argv[ i ], "-robot-delay")) {
+      if (i + 1 < argc) {
+        g_opt_robot_delay_ms = atoi(argv[ i + 1 ]);
+        i++;
+      }
       continue;
     }
 

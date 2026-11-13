@@ -46,6 +46,10 @@ mode for Neil, file by file.
 - **Robo mode goes on past the stairs.** The robot's pick on the level map
   (`request_to_choose_level`) was never acted on, so it stopped there for
   good; `wid_handle_requests` now enters the chosen level (`src/wid.cpp`).
+- **`--robot-delay <ms>`**: Robo mode moves the level on at most once per
+  delay, so it can be watched at a person's pace (about four steps a second
+  at 50) instead of the machine's; the catalog preview uses it
+  (`src/level_tick.cpp`, `src/main.cpp`, `src/globals.cpp`).
 - **A clean quit exits 0.** `CROAK_CLEAN` went through `die()` and exit 1;
   closing the window or Ctrl-C now quits cleanly too (`src/log.cpp`,
   `src/sdl_events.cpp`).

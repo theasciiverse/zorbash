@@ -90,6 +90,11 @@ ordinary SDL events. Game logic, widgets and the ascii map are untouched.
   but nothing ever read it (since the first commit). `wid_handle_requests`
   now enters the chosen level.
 
+- `level_tick.cpp`, `main.cpp`, `globals.cpp`: `--robot-delay <ms>`, an
+  option of its own: in Robo mode, `Level::tick()` runs at most once per
+  delay, so the robot can be watched at a person's pace (we record the
+  catalog preview with 50 ms, about four steps a second). Off by default.
+
 ## Sizes
 
 100x30 and up plays well; 80x24 starts, but the map is a sliver.

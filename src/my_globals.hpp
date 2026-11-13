@@ -21,6 +21,7 @@ extern bool g_loading;                  // Currently loading
 extern bool g_main_loop_running;        // SDL main loop is running.
 extern bool g_need_restart;             // Need to restart game
 extern bool g_opt_ascii;                // Ascii mode
+extern int  g_opt_robot_delay_ms;       // Robo mode: least time between its steps
 extern bool g_opt_ascii_override;       // Ascii mode forced
 extern bool g_opt_biome_chasms;         // Force this biome
 extern bool g_opt_biome_flooded;        // Force this biome

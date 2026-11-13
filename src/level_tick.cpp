@@ -35,6 +35,25 @@ void Level::handle_all_pending_things(void)
   all_things_pending_fall = {};
 }
 
+//
+// With --robot-delay, true when the level may move on in Robo mode: at least
+// that many milliseconds since it last did.
+//
+static bool robot_mode_paced(void)
+{
+  if (g_opt_robot_delay_ms <= 0) {
+    return true;
+  }
+
+  static ts_t last_step;
+  auto        now = time_ms();
+  if (last_step && (now - last_step < (ts_t) g_opt_robot_delay_ms)) {
+    return false;
+  }
+  last_step = now;
+  return true;
+}
+
 void Level::handle_input_events(void)
 {
   //
@@ -852,6 +871,14 @@ void Level::tick_(void)
 
 void Level::tick(void)
 {
+  //
+  // --robot-delay: Robo mode plays at a pace a person could follow, the
+  // level moving on at most once per delay
+  //
+  if (game->robot_mode && ! robot_mode_paced()) {
+    return;
+  }
+
   pcg_random_allowed++;
   tick_();
   pcg_random_allowed--;

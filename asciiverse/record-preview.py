@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Records the catalog preview, asciiverse/zorbash.cast (100x30, asciinema
 3): the title screen, a new game's dungeon map, then the first levels played
-by the game's own robot (Robo mode) for up to 38 s, or until it falls and
+by the game's own robot (Robo mode, slowed by --robot-delay to about four
+steps a second, as a person plays) for up to 42 s, or until it falls and
 its tombstone has been seen, then Ctrl-C quits.
 
 asciinema runs in a pseudo-terminal of this script's own, which answers the
@@ -37,7 +38,7 @@ env = {
     "XDG_STATE_HOME": os.path.join(home, "state"),
     "SDL_AUDIODRIVER": "dummy",
 }
-game = "zorbash --terminal --silent --seed %s" % seed
+game = "zorbash --terminal --silent --robot-delay 50 --seed %s" % seed
 argv = (["sh", "-c", "exec " + game] if dry else
         ["asciinema", "rec", "-q", "--overwrite", "--window-size", "%dx%d" % (W, H),
          "--idle-time-limit", "2", "--capture-env", "TERM,COLORTERM,LANG",
@@ -94,7 +95,7 @@ pump(1.5)                 # the first room
 del seen[:]
 key(ord("r"))             # Robo mode: the game plays itself
 robot = time.time()
-if pump(38.0, until=b"RIP:") and b"RIP:" in seen:
+if pump(42.0, until=b"RIP:") and b"RIP:" in seen:
     pump(3.5)             # the robot fell: its tombstone, then the end
 print("robot played %.1f s" % (time.time() - robot))
 os.write(fd, b"\x1b[99;5u")  # Ctrl-C: quits, the terminal restored

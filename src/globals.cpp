@@ -26,6 +26,7 @@ bool g_loading;                  // Currently loading
 bool g_main_loop_running;        // SDL main loop running.
 bool g_need_restart;             // Need to restart game
 bool g_opt_ascii;                // Ascii mode
+int  g_opt_robot_delay_ms;       // Robo mode: least time between its steps
 bool g_opt_ascii_override;       // Ascii mode forced
 bool g_opt_biome_chasms;         // Force this biome
 bool g_opt_biome_flooded;        // Force this biome
