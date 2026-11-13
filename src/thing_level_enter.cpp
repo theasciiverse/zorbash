@@ -116,7 +116,9 @@ void Thing::level_enter(bool rejoin)
     // Flush the persistent light map
     //
     blit_fbo_bind(FBO_PIXELART_FULLMAP_LIGHT);
-    glClear(GL_COLOR_BUFFER_BIT);
+    if (! g_opt_terminal) {
+      glClear(GL_COLOR_BUFFER_BIT);
+    }
     level->_is_currently_pixelart_raycast_lit = {};
   }
   level_push();

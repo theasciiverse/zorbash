@@ -3,6 +3,7 @@
 //
 
 #include "3rdparty/minilzo.hpp"
+#include "my_terminal.hpp"
 #include "my_alloc.hpp"
 #include "my_array_bounds_check.hpp"
 #include "my_globals_extra.hpp"
@@ -1294,6 +1295,20 @@ void Game::save_config(void)
     return;
   }
   CON("INF: Opened [%s] for writing", filename.c_str());
+
+  if (g_opt_terminal) {
+    //
+    // Keep the player's window settings and graphics mode as they were;
+    // terminal mode changes them only for itself.
+    //
+    Config c          = game->config;
+    bool   ascii_mode = g_opt_ascii;
+    terminal_config_for_saving(c, &g_opt_ascii);
+    out << bits((const Config &) c);
+    g_opt_ascii = ascii_mode;
+    return;
+  }
+
   const Config &c = game->config;
   out << bits(c);
 }

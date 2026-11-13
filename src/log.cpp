@@ -433,7 +433,11 @@ static void croak_clean_(const char *fmt, va_list args)
 
   FLUSH_THE_CONSOLE_FOR_ALL_PLATFORMS();
 
-  die();
+  //
+  // A clean exit: tidy up and exit with success, rather than die()'s exit(1)
+  //
+  quit();
+  exit(0);
 }
 
 void CROAK_CLEAN(const char *fmt, ...)

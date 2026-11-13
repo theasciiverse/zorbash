@@ -32,11 +32,15 @@ void sdl_fini(void)
     SDL_VideoQuit();
   }
 
-  LOG("SDL: Delete GL context");
-  SDL_GL_DeleteContext(sdl.context);
+  if (sdl.context) {
+    LOG("SDL: Delete GL context");
+    SDL_GL_DeleteContext(sdl.context);
+  }
 
-  LOG("SDL: Destroy window");
-  SDL_DestroyWindow(sdl.window);
+  if (sdl.window) {
+    LOG("SDL: Destroy window");
+    SDL_DestroyWindow(sdl.window);
+  }
 
   LOG("SDL: Quit");
   SDL_Quit();
@@ -148,7 +152,6 @@ static void sdl_init_joystick(void)
 
 uint8_t sdl_init(void)
 {
-  gl_ext_init();
 
   int video_width;
   int video_height;
@@ -156,6 +159,25 @@ uint8_t sdl_init(void)
 
   LOG("SDL: Version: %u.%u", SDL_MAJOR_VERSION, SDL_MINOR_VERSION);
   TRACE_AND_INDENT();
+
+  if (g_opt_terminal) {
+    //
+    // Terminal mode: no window, no GL. SDL is here for its event queue and
+    // timers, and for sound when there is an audio device.
+    //
+    LOG("SDL: Init events (terminal mode)");
+    if (SDL_Init(SDL_INIT_EVENTS | SDL_INIT_TIMER) < 0) {
+      DIE("SDL_Init failed %s", SDL_GetError());
+      return false;
+    }
+    if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0) {
+      LOG("SDL: No audio: %s", SDL_GetError());
+    }
+    wid_asciimap_update();
+    return true;
+  }
+
+  gl_ext_init();
 
   LOG("SDL: Init audio");
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
@@ -784,7 +806,7 @@ uint8_t config_gfx_vsync_enable(class Tokens *tokens, void *context)
 void config_gfx_vsync_update(void)
 {
   TRACE_NO_INDENT();
-  if (game->config.gfx_vsync_locked) {
+  if (game->config.gfx_vsync_locked || g_opt_terminal) {
     return;
   }
 
@@ -845,7 +867,9 @@ void sdl_flush_display(bool force)
     }
   }
 
-  glEnable(GL_TEXTURE_2D);
+  if (! g_opt_terminal) {
+    glEnable(GL_TEXTURE_2D);
+  }
   gl_enter_2d_mode();
   wid_display_all(false);
   gl_leave_2d_mode();

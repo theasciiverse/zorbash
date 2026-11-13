@@ -2,6 +2,7 @@
 // Copyright goblinhack@gmail.com
 //
 
+#include "my_terminal.hpp"
 #include "my_game.hpp"
 #include "my_sdl_proto.hpp"
 #include "my_ui.hpp"
@@ -88,7 +89,12 @@ static uint8_t wid_config_top_key_up(Widp w, const struct SDL_Keysym *key)
             TRACE_NO_INDENT();
             auto c = wid_event_to_char(key);
             switch (c) {
-              case 'g' : wid_config_top_gfx(nullptr, 0, 0, 0); return true;
+              case 'g' :
+                if (g_opt_terminal) {
+                  return true;
+                }
+                wid_config_top_gfx(nullptr, 0, 0, 0);
+                return true;
               case 'm' : wid_config_top_mouse(nullptr, 0, 0, 0); return true;
               case 's' : wid_config_top_sound(nullptr, 0, 0, 0); return true;
               case 'k' : wid_config_top_keyboard(nullptr, 0, 0, 0); return true;
@@ -157,7 +163,11 @@ void Game::wid_config_top_menu(void)
   }
 
   int y_at = 0;
-  {
+
+  //
+  // Terminal mode has no window to configure
+  //
+  if (! g_opt_terminal) {
     TRACE_NO_INDENT();
     auto p = wid_config_top_window->wid_text_area->wid_text_area;
     auto w = wid_new_square_button(p, "gfx");
@@ -171,8 +181,8 @@ void Game::wid_config_top_menu(void)
     wid_set_on_mouse_up(w, wid_config_top_gfx);
     wid_set_pos(w, tl, br);
     wid_set_text(w, "%%fg=white$G%%fg=reset$raphics");
+    y_at += box_step;
   }
-  y_at += box_step;
   {
     TRACE_NO_INDENT();
     auto p = wid_config_top_window->wid_text_area->wid_text_area;

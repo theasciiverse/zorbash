@@ -10,6 +10,7 @@
 #include "my_tests.hpp"
 #include "my_ui.hpp"
 #include "my_wid_console.hpp"
+#include "my_wid_popups.hpp"
 #include "my_wid_topcon.hpp"
 
 //
@@ -36,7 +37,9 @@ void sdl_loop(void)
   sdl_mouse_center();
   SDL_SetEventFilter(sdl_filter_events, nullptr);
 
-  glEnable(GL_TEXTURE_2D);
+  if (! g_opt_terminal) {
+    glEnable(GL_TEXTURE_2D);
+  }
 
   //
   // Wait for events
@@ -47,7 +50,7 @@ void sdl_loop(void)
 
   g_main_loop_running = true;
 
-  game->config.gfx_vsync_locked = SDL_GL_GetSwapInterval();
+  game->config.gfx_vsync_locked = g_opt_terminal ? 1 : SDL_GL_GetSwapInterval();
 
   if (! game->config.gfx_vsync_locked) {
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
@@ -61,8 +64,10 @@ void sdl_loop(void)
     GL_ERROR_CHECK();
   }
 
-  SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
-  GL_ERROR_CHECK();
+  if (! g_opt_terminal) {
+    SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
+    GL_ERROR_CHECK();
+  }
 
   gl_enter_2d_mode();
 
@@ -114,7 +119,12 @@ void sdl_loop(void)
     // Various event frequencies
     //
     int  ts_now           = time_ms();
-    bool update_very_slow = (ts_now - ui_ts_very_slow_last >= UI_EVENT_LOOP_FREQ_VERY_SLOW_MS);
+    //
+    // A terminal shows about 30 frames a second at most; redrawing the whole
+    // UI faster than that only costs CPU.
+    //
+    int  very_slow_ms     = g_opt_terminal ? TERMINAL_FRAME_MS : UI_EVENT_LOOP_FREQ_VERY_SLOW_MS;
+    bool update_very_slow = (ts_now - ui_ts_very_slow_last >= very_slow_ms);
     bool update_slow      = (ts_now - ui_ts_slow_last >= UI_EVENT_LOOP_FREQ_SLOW_MS);
     bool update_fast      = (ts_now - ui_ts_fast_last >= UI_EVENT_LOOP_FREQ_FAST_MS);
 
@@ -178,6 +188,19 @@ void sdl_loop(void)
       //
       if (g_opt_terminal) {
         terminal_poll();
+
+        //
+        // The terminal changed size: lay the UI out again, as a graphics mode change does
+        //
+        if (terminal_take_layout_change()) {
+          sdl_display_reset();
+          if (game->level) {
+            game->level->scroll_map_to_player_immediately();
+          }
+          if (wid_main_menu_window) {
+            game->wid_main_menu_select();
+          }
+        }
       }
       SDL_PumpEvents();
 

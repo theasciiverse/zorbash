@@ -7,6 +7,7 @@
 #include "my_game.hpp"
 #include "my_sdl_event.hpp"
 #include "my_sdl_proto.hpp"
+#include "my_ui.hpp"
 #include "my_wid_actionbar.hpp"
 #include "my_wid_asciimap.hpp"
 #include "my_wid_botcon.hpp"
@@ -21,9 +22,10 @@ void sdl_display(void)
 {
   if (g_opt_terminal) {
     //
-    // ascii_display wrote the frame to the terminal; just yield a little
+    // ascii_display wrote the frame to the terminal; sleep until there is
+    // input or the next tick is due.
     //
-    SDL_Delay(2);
+    terminal_wait(UI_EVENT_LOOP_FREQ_FAST_MS);
     return;
   }
 

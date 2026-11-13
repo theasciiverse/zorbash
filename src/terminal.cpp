@@ -35,8 +35,10 @@
 #include <cstring>
 #include <cwchar>
 #include <fcntl.h>
+#include <poll.h>
 #include <string>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
@@ -46,11 +48,13 @@ bool g_opt_terminal;
 static bool            term_started;
 static int             term_fd = -1;
 static int             term_saved_stderr = -1;
+static bool            term_redirected;
 static bool            term_have_saved_termios;
 static struct termios  term_saved_termios;
 static int             term_cols = 80;
 static int             term_rows = 24;
 static volatile bool   term_resized;
+static bool            term_layout_changed;
 static bool            term_kitty_keys;
 static uint8_t         term_keys[ SDL_NUM_SCANCODES ];
 static uint64_t        term_key_release_at[ SDL_NUM_SCANCODES ];
@@ -61,6 +65,8 @@ static uint32_t        term_mouse_buttons;
 static std::string     term_in;
 static uint64_t        term_in_esc_at;
 static uint64_t        term_last_frame_ms;
+static Config         *term_file_config;
+static bool            term_file_ascii;
 
 //
 // What is on the terminal now
@@ -123,8 +129,48 @@ static void term_read_size(void)
 
 static void term_on_winch(int) { term_resized = true; }
 
+bool terminal_take_layout_change(void)
+{
+  bool changed        = term_layout_changed;
+  term_layout_changed = false;
+  return changed;
+}
+
 int terminal_cols(void) { return std::min(term_cols, (int) TERM_WIDTH_MAX); }
 int terminal_rows(void) { return std::min(term_rows, (int) TERM_HEIGHT_MAX); }
+
+//
+// mkdir -p
+//
+static void term_mkdirs(const std::string &path)
+{
+  for (size_t i = 1; i <= path.size(); i++) {
+    if (i == path.size() || path[ i ] == '/') {
+      mkdir(path.substr(0, i).c_str(), 0700);
+    }
+  }
+}
+
+std::string terminal_state_dir(void)
+{
+  std::string dir;
+  const char *xdg = getenv("XDG_STATE_HOME");
+  if (xdg && xdg[ 0 ] == '/') {
+    dir = xdg;
+  } else {
+    const char *home = getenv("HOME");
+    if (! home || ! home[ 0 ]) {
+      return "";
+    }
+#ifdef __APPLE__
+    dir = std::string(home) + "/Library/Application Support";
+#else
+    dir = std::string(home) + "/.local/state";
+#endif
+  }
+  term_mkdirs(dir);
+  return dir;
+}
 
 bool terminal_init(void)
 {
@@ -133,21 +179,27 @@ bool terminal_init(void)
   }
 
   //
-  // No window: SDL renders (and we ignore) offscreen. Leave it alone if the
-  // player picked a driver themselves.
-  //
-  setenv("SDL_VIDEODRIVER", "offscreen", 0);
-
-  //
   // For wcwidth on the characters we write
   //
   setlocale(LC_CTYPE, "");
 
   //
-  // Our own handle on the terminal, so that anything else the game prints
-  // can be sent elsewhere once we take over the screen.
+  // Our own handle on the terminal. Everything else the game prints goes
+  // nowhere until its log files are open, then into them: the terminal shows
+  // only the game.
   //
-  term_fd = dup(STDOUT_FILENO);
+  term_fd           = dup(STDOUT_FILENO);
+  term_saved_stderr = dup(STDERR_FILENO);
+  fflush(stdout);
+  fflush(stderr);
+  int devnull = open("/dev/null", O_WRONLY);
+  if (devnull >= 0) {
+    dup2(devnull, STDOUT_FILENO);
+    dup2(devnull, STDERR_FILENO);
+    close(devnull);
+  }
+  term_redirected = true;
+  atexit(terminal_fini);
 
   term_read_size();
   return true;
@@ -180,9 +232,8 @@ void terminal_start(void)
   sigaction(SIGWINCH, &sa, nullptr);
 
   //
-  // From here on the screen is ours: stray prints from the game go to its log files.
+  // Stray prints from the game go to its log files
   //
-  term_saved_stderr = dup(STDERR_FILENO);
   if (g_log_stdout) {
     fflush(stdout);
     dup2(fileno(g_log_stdout), STDOUT_FILENO);
@@ -193,7 +244,6 @@ void terminal_start(void)
   }
 
   term_started = true;
-  atexit(terminal_fini);
 
   //
   // Alternate screen, hide cursor, no autowrap, mouse with motion in SGR form,
@@ -210,25 +260,25 @@ void terminal_start(void)
 
 void terminal_fini(void)
 {
+  //
+  // Only async-signal-safe calls in here, as this runs from the crash handler too
+  //
+  if (term_redirected) {
+    term_redirected = false;
+    dup2(term_fd, STDOUT_FILENO);
+    if (term_saved_stderr >= 0) {
+      dup2(term_saved_stderr, STDERR_FILENO);
+    }
+  }
+
   if (! term_started) {
     return;
   }
   term_started = false;
 
-  //
-  // Only async-signal-safe calls from here on, as this runs from the crash handler too
-  //
   static const char reset[] = "\x1b[<u\x1b[?1003l\x1b[?1006l\x1b[0m\x1b[?7h\x1b[?25h\x1b[?1049l";
   ssize_t           unused  = write(term_fd, reset, sizeof(reset) - 1);
   (void) unused;
-
-  //
-  // Give stdout and stderr back to the terminal for any last words
-  //
-  dup2(term_fd, STDOUT_FILENO);
-  if (term_saved_stderr >= 0) {
-    dup2(term_saved_stderr, STDERR_FILENO);
-  }
 
   if (term_have_saved_termios) {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &term_saved_termios);
@@ -236,6 +286,44 @@ void terminal_fini(void)
 
   int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
   fcntl(STDIN_FILENO, F_SETFL, flags & ~O_NONBLOCK);
+}
+
+void terminal_remember_config(void)
+{
+  delete term_file_config;
+  term_file_config = new Config(game->config);
+  term_file_ascii  = g_opt_ascii;
+}
+
+void terminal_config_for_saving(Config &c, bool *ascii_mode)
+{
+  if (! term_file_config) {
+    return;
+  }
+  const Config &f = *term_file_config;
+
+  c.ascii_gl_height       = f.ascii_gl_height;
+  c.ascii_gl_width        = f.ascii_gl_width;
+  c.config_pix_height     = f.config_pix_height;
+  c.config_pix_width      = f.config_pix_width;
+  c.game_pix_height       = f.game_pix_height;
+  c.game_pix_scale_height = f.game_pix_scale_height;
+  c.game_pix_scale_width  = f.game_pix_scale_width;
+  c.game_pix_width        = f.game_pix_width;
+  c.gfx_vsync_locked      = f.gfx_vsync_locked;
+  c.one_pixel_height      = f.one_pixel_height;
+  c.one_pixel_width       = f.one_pixel_width;
+  c.tile_pix_height       = f.tile_pix_height;
+  c.tile_pix_width        = f.tile_pix_width;
+  c.tile_pixel_height     = f.tile_pixel_height;
+  c.tile_pixel_width      = f.tile_pixel_width;
+  c.ui_pix_height         = f.ui_pix_height;
+  c.ui_pix_width          = f.ui_pix_width;
+  c.video_w_h_ratio       = f.video_w_h_ratio;
+  c.window_pix_height     = f.window_pix_height;
+  c.window_pix_width      = f.window_pix_width;
+
+  *ascii_mode = term_file_ascii;
 }
 
 const uint8_t *terminal_keyboard_state(void) { return term_keys; }
@@ -418,7 +506,12 @@ static bool term_key_to_sdl(int key, uint16_t mod, SDL_Keysym *ks)
     }
   }
 
-  sc = SDL_GetScancodeFromKey(sym);
+  //
+  // The game's own table: SDL's keymap only exists when SDL video runs,
+  // which it does not in terminal mode.
+  //
+  ks->sym = sym;
+  sc      = sdlk_to_scancode(*ks);
 
   ks->sym      = sym;
   ks->scancode = sc;
@@ -817,6 +910,15 @@ static void term_parse_input(bool flush_lone_esc)
   term_in.erase(0, i);
 }
 
+void terminal_wait(int ms)
+{
+  struct pollfd pfd;
+  pfd.fd      = STDIN_FILENO;
+  pfd.events  = POLLIN;
+  pfd.revents = 0;
+  poll(&pfd, 1, ms);
+}
+
 void terminal_poll(void)
 {
   if (! term_started) {
@@ -847,9 +949,14 @@ void terminal_poll(void)
   term_release_expired_keys();
 
   if (term_resized) {
-    term_resized = false;
+    term_resized  = false;
+    int old_cols  = terminal_cols();
+    int old_rows  = terminal_rows();
     term_read_size();
     term_screen_valid = false;
+    if (terminal_cols() != old_cols || terminal_rows() != old_rows) {
+      term_layout_changed = true;
+    }
   }
 }
 

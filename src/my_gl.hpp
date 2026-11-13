@@ -332,8 +332,17 @@ void gl_push(float **P, float *p_end, uint8_t first, float tex_left, float tex_t
 void glcolor(color s);
 void glcolorfast(color s);
 
+//
+// In terminal mode there is no GL context at all: the GL helpers return at once.
+//
+extern bool g_opt_terminal;
+#define GL_TERMINAL_SKIP()                                                                                           \
+  if (unlikely(g_opt_terminal)) {                                                                                    \
+    return;                                                                                                          \
+  }
+
 #define GL_ERROR_CHECK()                                                                                             \
-  {                                                                                                                  \
+  if (likely(! g_opt_terminal)) {                                                                                    \
     auto errCode = glGetError();                                                                                     \
     if (likely(errCode == GL_NO_ERROR)) {                                                                            \
       /* LOG("GFX: ok at %s:%s line %u", SRC_FILE_NAME, SRC_FUNC_NAME, SRC_LINE_NUM); */                             \

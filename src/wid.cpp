@@ -6849,8 +6849,10 @@ void wid_display_all(bool ok_to_handle_requests)
   gl_leave_2d_mode();
   gl_enter_2d_mode(game->config.ui_pix_width, game->config.ui_pix_height);
   blit_fbo_bind_locked(FBO_WID);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-  glClear(GL_COLOR_BUFFER_BIT);
+  if (! g_opt_terminal) {
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glClear(GL_COLOR_BUFFER_BIT);
+  }
   glcolor(WHITE);
 
   TRACE_NO_INDENT();

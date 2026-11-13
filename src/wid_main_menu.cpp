@@ -2,6 +2,7 @@
 // Copyright goblinhack@gmail.com
 //
 
+#include "my_terminal.hpp"
 #include "my_color_defs.hpp"
 #include "my_game.hpp"
 #include "my_globals_extra.hpp"
@@ -141,7 +142,7 @@ static uint8_t wid_main_menu_key_down(Widp w, const struct SDL_Keysym *key)
   //
   // Toggle gfx mode
   //
-  if (sdlk_eq(*key, game->config.key_gfx_toggle) || sdlk_eq(*key, game->config.key_unused1)) {
+  if ((sdlk_eq(*key, game->config.key_gfx_toggle) || sdlk_eq(*key, game->config.key_unused1)) && ! g_opt_terminal) {
     g_opt_ascii = ! g_opt_ascii;
     sdl_display_reset();
     if (g_opt_ascii) {
@@ -353,10 +354,15 @@ static void wid_main_menu_tick(Widp w)
   if (wid_main_menu_window) {
     ascii_putf(1, 1, GREEN, BLACK, L"Version: " MYVER);
 
-    auto        k    = ::to_string(game->config.key_gfx_toggle);
-    std::string text = " Press %%fg=yellow$" + k + "%%fg=reset$ to toggle the graphics mode ";
-    ascii_putf(TERM_WIDTH / 2 - (length_without_format(text) / 2), TERM_HEIGHT - 1, YELLOW, BLACK,
-               string_to_wstring(text));
+    //
+    // Terminal mode has only the one graphics mode
+    //
+    if (! g_opt_terminal) {
+      auto        k    = ::to_string(game->config.key_gfx_toggle);
+      std::string text = " Press %%fg=yellow$" + k + "%%fg=reset$ to toggle the graphics mode ";
+      ascii_putf(TERM_WIDTH / 2 - (length_without_format(text) / 2), TERM_HEIGHT - 1, YELLOW, BLACK,
+                 string_to_wstring(text));
+    }
 
     if (! g_opt_player_name.empty()) {
       auto player_name = "Player name: '" + g_opt_player_name + "'";

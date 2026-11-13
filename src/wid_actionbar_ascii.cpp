@@ -101,6 +101,15 @@ void wid_actionbar_ascii_init(void)
   int option_width  = 8;
   int option_height = 1;
 
+  //
+  // On narrower screens, narrow the buttons so the bar fits between the side
+  // bars rather than going under them.
+  //
+  int room = TERM_WIDTH - UI_LEFTBAR_WIDTH - UI_RIGHTBAR_WIDTH - 2;
+  while ((option_width > 5) && (options * (option_width + 1) > room)) {
+    option_width--;
+  }
+
   int w          = options * (option_width + 1);
   int left_half  = w / 2;
   int right_half = w - left_half;

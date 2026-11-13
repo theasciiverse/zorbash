@@ -2,6 +2,7 @@
 // Copyright goblinhack@gmail.com
 //
 
+#include "my_terminal.hpp"
 #include "my_color_defs.hpp"
 #include "my_game.hpp"
 #include "my_player.hpp"
@@ -117,7 +118,7 @@ uint8_t wid_topcon_input(Widp w, const SDL_Keysym *key)
   //
   // Toggle gfx mode. Do this outside the level tick loop to avoid issues with moving things.
   //
-  if (sdlk_eq(*key, game->config.key_gfx_toggle)) {
+  if (sdlk_eq(*key, game->config.key_gfx_toggle) && ! g_opt_terminal) {
     DBG("INF: Pressed a key; request to toggle");
     game->request_to_toggle_gfx = true;
     return false; // To avoid click noise
