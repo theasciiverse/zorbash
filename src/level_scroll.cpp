@@ -2,6 +2,7 @@
 // Copyright goblinhack@gmail.com
 //
 
+#include "my_wid_asciimap.hpp"
 #include "my_game.hpp"
 #include "my_sdl_event.hpp"
 #include "my_thing.hpp"
@@ -17,8 +18,14 @@
 void Level::scroll_map_set_bounds(void)
 {
   if (g_opt_ascii) {
-    map_at.x = 0;
-    map_at.y = 0;
+    //
+    // The ascii map stays put when the whole level fits on screen; on a
+    // smaller screen it scrolls, but never past the level's edges.
+    //
+    int max_x = std::max(0, MAP_WIDTH - (MAP_BORDER_ROCK - 1) * 2 - TILES_VISIBLE_ACROSS);
+    int max_y = std::max(0, MAP_HEIGHT - (MAP_BORDER_ROCK - 1) * 2 - TILES_VISIBLE_DOWN);
+    map_at.x  = std::max(0, std::min((int) map_at.x, max_x));
+    map_at.y  = std::max(0, std::min((int) map_at.y, max_y));
   } else {
     if (map_at.x > MAP_WIDTH - 1) {
       map_at.x = MAP_WIDTH - 1;
@@ -306,18 +313,45 @@ void Level::scroll_map_set_target(void)
       }
 
       //
-      // Scroll if at the edges of the screen
+      // Scroll if near the edges of the part of the screen that shows the
+      // map (the side bars cover the rest), so the player stays in view.
       //
-      if (player->last_ascii_at.x >= TERM_WIDTH - scroll_border) {
+      int map_left   = 0;
+      int map_top    = 0;
+      int map_right  = TERM_WIDTH;
+      int map_bottom = TERM_HEIGHT;
+      if (wid_asciimap) {
+        int tlx;
+        int tly;
+        int brx;
+        int bry;
+        wid_get_tl_x_tl_y_br_x_br_y(wid_asciimap, &tlx, &tly, &brx, &bry);
+        map_left   = tlx;
+        map_top    = tly;
+        map_right  = brx + 1;
+        map_bottom = bry + 1;
+      }
+
+      int border_x = std::min(scroll_border, (map_right - map_left) / 4);
+      int border_y = std::min(scroll_border, (map_bottom - map_top) / 4);
+
+      //
+      // Where the player is on screen, from the map position (as the ascii
+      // map draws it), so it is right even when the player is out of view.
+      //
+      int at_x = map_left + (player->curr_at.x - (int) map_at.x) - (MAP_BORDER_ROCK - 1);
+      int at_y = map_top + (player->curr_at.y - (int) map_at.y) - (MAP_BORDER_ROCK - 1);
+
+      if (at_x >= map_right - border_x) {
         auto_scroll = true;
       }
-      if (player->last_ascii_at.x < scroll_border) {
+      if (at_x < map_left + border_x) {
         auto_scroll = true;
       }
-      if (player->last_ascii_at.y >= TERM_HEIGHT - scroll_border) {
+      if (at_y >= map_bottom - border_y) {
         auto_scroll = true;
       }
-      if (player->last_ascii_at.y < scroll_border) {
+      if (at_y < map_top + border_y) {
         auto_scroll = true;
       }
     }

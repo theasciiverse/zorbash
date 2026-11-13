@@ -76,6 +76,15 @@ ordinary SDL events. Game logic, widgets and the ascii map are untouched.
   between the side bars (below about 130 columns), the buttons narrow so
   "Quit" is not hidden under the left bar.
 
+- `level_scroll.cpp`: the ascii map was pinned at (0,0), which shows a
+  whole level only when the screen is big enough (a level is 96x48; the map
+  area at 132x46 is about 90x40). It now scrolls when the level does not
+  fit, clamped to the level, and stays pinned when it does. The test for
+  scrolling near an edge used the player's last drawn position against the
+  whole screen; it now uses the player's map position against the map area,
+  so the player cannot walk under the right-hand bar (which could happen at
+  132x46 too, between columns 110 and 124).
+
 ## Sizes
 
 100x30 and up plays well; 80x24 starts, but the map is a sliver.

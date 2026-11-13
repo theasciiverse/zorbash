@@ -43,15 +43,22 @@ argv = (["sh", "-c", "exec " + game] if dry else
 
 pid, fd = pty.fork()
 if pid == 0:
+    # size the terminal before anything starts in it, so nothing sees another size
+    fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", H, W, 0, 0))
     os.chdir(home)
     os.execvpe(argv[0], argv, env)
-fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", H, W, 0, 0))
 
 
-def pump(t):
-    """Reads the game's output for t seconds, answering its terminal queries."""
+seen = bytearray()
+
+
+def pump(t, until=None):
+    """Reads the game's output for t seconds (or until a text appears),
+    answering its terminal queries."""
     end = time.time() + t
     while time.time() < end:
+        if until is not None and until in seen:
+            return True
         r, _, _ = select.select([fd], [], [], 0.01)
         if r:
             try:
@@ -60,6 +67,7 @@ def pump(t):
                 return False
             if not data:
                 return False
+            seen.extend(data)
             if b"\x1b[?u" in data:                    # kitty keyboard: yes
                 os.write(fd, b"\x1b[?11u")
             if b"\x1b[c" in data:                     # device attributes
@@ -77,11 +85,12 @@ def key(code, hold=0.08):
 pump(3.5)                 # the title screen
 key(ord("n"))             # New game: the dungeon's map
 pump(3.0)
+del seen[:]
 key(13)                   # Enter the Dungeon (the level is made: cut to 2 s)
-pump(14.0)
-pump(2.5)                 # the first room
+pump(20.0, until=b"Welcome to the lair")
+pump(1.5)                 # the first room
 key(ord("r"))             # Robo mode: the game plays itself
-pump(42.0)
+pump(38.0)
 os.write(fd, b"\x1b[99;5u")  # Ctrl-C: quits, the terminal restored
 pump(4.0)
 try:
