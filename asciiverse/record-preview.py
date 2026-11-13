@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Records the catalog preview, asciiverse/zorbash.cast (100x30, asciinema
 3): the title screen, a new game's dungeon map, then the first levels played
-by the game's own robot (Robo mode), until it quits with Ctrl-C.
+by the game's own robot (Robo mode) for up to 38 s, or until it falls and
+its tombstone has been seen, then Ctrl-C quits.
 
 asciinema runs in a pseudo-terminal of this script's own, which answers the
 game like a terminal with the kitty keyboard protocol. Keys are sent on a
@@ -10,7 +11,8 @@ level being made) are cut by asciinema's idle limit.
 
     python3 asciiverse/record-preview.py [--dry] [--seed NAME]
       --dry    run the game without recording
-      --seed   the dungeon seed (default below, picked for a lively start)
+      --seed   the dungeon seed (default below; the robot fights by chance, so
+               a take can end early: the script says how long it played)
 
 Plays the staged game (stage/zorbash, from asciiverse/stage.sh) with sound
 off, a scratch HOME and state folder, and a neutral player name."""
@@ -21,7 +23,7 @@ STAGE = os.path.join(ROOT, "stage")
 CAST = os.path.join(ROOT, "asciiverse", "zorbash.cast")
 W, H = 100, 30
 dry = "--dry" in sys.argv
-seed = sys.argv[sys.argv.index("--seed") + 1] if "--seed" in sys.argv else "lanternmoth"
+seed = sys.argv[sys.argv.index("--seed") + 1] if "--seed" in sys.argv else "amberhollow"
 
 home = tempfile.mkdtemp()
 env = {
@@ -89,8 +91,12 @@ del seen[:]
 key(13)                   # Enter the Dungeon (the level is made: cut to 2 s)
 pump(20.0, until=b"Welcome to the lair")
 pump(1.5)                 # the first room
+del seen[:]
 key(ord("r"))             # Robo mode: the game plays itself
-pump(38.0)
+robot = time.time()
+if pump(38.0, until=b"RIP:") and b"RIP:" in seen:
+    pump(3.5)             # the robot fell: its tombstone, then the end
+print("robot played %.1f s" % (time.time() - robot))
 os.write(fd, b"\x1b[99;5u")  # Ctrl-C: quits, the terminal restored
 pump(4.0)
 try:

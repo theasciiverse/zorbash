@@ -15,6 +15,7 @@
 #include "my_ui.hpp"
 #include "my_unicode.hpp"
 #include "my_wid_actionbar.hpp"
+#include "my_wid_choose_level.hpp"
 #include "my_wid_console.hpp"
 #include "my_wid_inventory.hpp"
 #include "my_wid_leftbar.hpp"
@@ -6579,6 +6580,18 @@ static void wid_handle_requests(void)
   //
   if (wid_console_window && wid_console_window->visible) {
     return;
+  }
+
+  //
+  // The robot picked the next level on the level map; enter it here, outside
+  // that window's own tick, as entering a level closes the window.
+  //
+  if (game->request_to_choose_level) {
+    auto b                        = game->request_to_choose_level;
+    game->request_to_choose_level = {};
+    if (game->robot_mode) {
+      wid_choose_next_dungeons_enter(b, 0, 0, SDL_BUTTON_LEFT);
+    }
   }
 
   //

@@ -85,6 +85,11 @@ ordinary SDL events. Game logic, widgets and the ascii map are untouched.
   so the player cannot walk under the right-hand bar (which could happen at
   132x46 too, between columns 110 and 124).
 
+- `wid.cpp`: Robo mode stopped for good at the level map after taking the
+  stairs: `wid_choose_next_dungeons_tick` sets `game->request_to_choose_level`,
+  but nothing ever read it (since the first commit). `wid_handle_requests`
+  now enters the chosen level.
+
 ## Sizes
 
 100x30 and up plays well; 80x24 starts, but the map is a sliver.
