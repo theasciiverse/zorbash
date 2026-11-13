@@ -83,7 +83,13 @@ EOF
 chmod +x "$deps/bin/sdl2-config"
 
 rm -f "$root/zorbash"
-PATH="$deps/bin:$PATH" ./RUNME --rel --github
+PATH="$deps/bin:$PATH" ./RUNME --rel --github || true
+if [ ! -f zorbash ] && [ "$(uname)" != Darwin ]; then
+  # a GL call the source scan missed: take the names the objects need, link again
+  sh "$root/asciiverse/glstubs.sh" "$root/src" "$deps/lib" "$root/.o"
+  PATH="$deps/bin:$PATH" USE_PRECOMPILED=yep make -f build/Makefile -j "$jobs" all
+fi
+test -f zorbash
 file zorbash
 strip zorbash
 ls -l zorbash
