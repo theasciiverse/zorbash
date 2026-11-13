@@ -542,6 +542,12 @@ static void parse_args(int argc, char *argv[])
       continue;
     }
 
+#ifdef ZORBASH_TERMINAL_ONLY
+    if (! strcasecmp(argv[ i ], "--pixelart") || ! strcasecmp(argv[ i ], "-pixelart")) {
+      continue;
+    }
+#endif
+
     if (! strcasecmp(argv[ i ], "--pixelart") || ! strcasecmp(argv[ i ], "-pixelart")) {
       g_opt_ascii          = false;
       g_opt_ascii_override = true;
@@ -780,8 +786,12 @@ int main(int argc, char *argv[])
   ARGV = argv;
 
   //
-  // Terminal mode decides where the logs and saves go, so look for it first
+  // Terminal mode decides where the logs and saves go, so look for it first.
+  // A build made without a window (ZORBASH_TERMINAL_ONLY) has no other mode.
   //
+#ifdef ZORBASH_TERMINAL_ONLY
+  g_opt_terminal = true;
+#endif
   for (int i = 1; i < argc; i++) {
     if (! strcasecmp(argv[ i ], "--terminal") || ! strcasecmp(argv[ i ], "-terminal")) {
       g_opt_terminal = true;
