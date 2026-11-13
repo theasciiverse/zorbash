@@ -528,6 +528,14 @@ static void parse_args(int argc, char *argv[])
     g_opt_no_slow_log_flush = true;
   }
 
+  //
+  // Terminal mode only ever shows the ascii UI, whatever the config says
+  //
+  if (g_opt_terminal) {
+    g_opt_ascii          = true;
+    g_opt_ascii_override = true;
+  }
+
   for (i = 1; i < argc; i++) {
     if (! strcasecmp(argv[ i ], "--ascii") || ! strcasecmp(argv[ i ], "-ascii")) {
       g_opt_ascii          = true;
@@ -542,13 +550,10 @@ static void parse_args(int argc, char *argv[])
       continue;
     }
 
-#ifdef ZORBASH_TERMINAL_ONLY
     if (! strcasecmp(argv[ i ], "--pixelart") || ! strcasecmp(argv[ i ], "-pixelart")) {
-      continue;
-    }
-#endif
-
-    if (! strcasecmp(argv[ i ], "--pixelart") || ! strcasecmp(argv[ i ], "-pixelart")) {
+      if (g_opt_terminal) {
+        continue; // a terminal only shows ascii
+      }
       g_opt_ascii          = false;
       g_opt_ascii_override = true;
       continue;
