@@ -25,7 +25,8 @@ SDL2_MIXER=2.8.1
 if [ -f /etc/os-release ] && grep -q '^ID=ubuntu' /etc/os-release && [ "$(id -u)" = 0 ]; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
-  apt-get install -y -qq build-essential clang cmake git pkg-config python3 file \
+  # libgl-dev for the OpenGL headers only: the binary links asciiverse/glstubs.sh
+  apt-get install -y -qq build-essential clang cmake git pkg-config python3 file libgl-dev \
     libasound2-dev libpulse-dev libpipewire-0.3-dev >/dev/null
 fi
 
