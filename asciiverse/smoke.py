@@ -17,11 +17,13 @@ import os, subprocess, sys, tempfile, threading, time
 
 W, H = 100, 30
 WINDOWS = sys.platform == "win32"
-cmd = sys.argv[1:] + ["--terminal", "--silent", "--seed", "amberhollow"]
+# paths made absolute: the game runs in the scratch folder
+cmd = [os.path.abspath(a) if os.path.isfile(a) else a for a in sys.argv[1:]]
+cmd += ["--terminal", "--silent", "--seed", "amberhollow"]
 scratch = tempfile.mkdtemp(prefix="zorbash-smoke-")
 env = dict(os.environ, SDL_AUDIODRIVER="dummy", APPDATA=scratch,
            HOME=scratch, XDG_STATE_HOME=os.path.join(scratch, "state"),
-           WINEPREFIX=os.path.join(scratch, "wine"), WINEDEBUG="-all",
+           WINEPREFIX=os.path.join(scratch, "wine"), WINEARCH="win64", WINEDEBUG="-all",
            TERM="xterm-256color", COLORTERM="truecolor", LANG="C.UTF-8")
 seen = bytearray()
 lock = threading.Lock()
