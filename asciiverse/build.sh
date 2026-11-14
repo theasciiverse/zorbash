@@ -107,7 +107,7 @@ fi
 if [ -n "$windows" ]; then
   # upstream links Windows as a windowed program (-mwindows, in
   # build/build.sh); link again as a console one, which terminal mode needs
-  sed -i 's/ -mwindows / -mconsole /' src/.Makefile
+  sed -i 's/ -mwindows / -mconsole /' src/Makefile
   rm -f "$exe"
   PATH="$deps/bin:$PATH" USE_PRECOMPILED=yep make -f build/Makefile -j "$jobs" all
   file "$exe" | grep -q console

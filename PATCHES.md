@@ -36,6 +36,15 @@ mode for Neil, file by file.
   - `sdl_keyboard_state()` and `sdl_mouse_state()` stand in for SDL's state
     queries at their six call sites.
   - `-DZORBASH_TERMINAL_ONLY` builds a game whose only mode is the terminal.
+  - **On Windows** the same backend plays in the console (Windows 10 and
+    later; Windows Terminal or the classic console). The `_WIN32` sections
+    of `src/terminal.cpp` write the same output through the console's own
+    escape sequence support, and read keys and mouse as console input
+    records, which carry real key releases, the keypad with num lock off,
+    the wheel and focus changes, into the same key and mouse handlers.
+    Saves, config and logs go to `%APPDATA%\zorbash`, as upstream's.
+    `src/main.cpp` no longer shows the loading console widget on Windows in
+    terminal mode.
 - **The ascii map scrolls on smaller screens.** It was pinned at the level's
   top left, which shows a whole level (96x48) only at about 132x46 and up. It
   now scrolls when the level does not fit, clamped to the level, and keeps
@@ -71,9 +80,20 @@ header for `<cmath>` and `<mutex>`.
   SDL or GL library, and carries every picture, sound and tune inside it.
 - `asciiverse/stage.sh`, `asciiverse/nfpm.yaml`,
   `.github/workflows/release.yml`: av archives for Linux (x86-64 and ARM64,
-  glibc 2.35 and newer) and macOS (x86-64 and ARM64), and .deb, .rpm and
-  Arch packages. No Windows build: the terminal backend reads the terminal
-  through POSIX (termios, poll).
+  glibc 2.35 and newer), macOS (x86-64 and ARM64) and Windows (x86-64), and
+  .deb, .rpm and Arch packages.
+- Windows (`.github/workflows/windows.yml`, called by the release): built
+  in MSYS2's UCRT64 shell with clang, as upstream builds for Windows, as a
+  console program (`-mconsole`, `SDL_MAIN_HANDLED`, no SDL2main; upstream's
+  link line says `-mwindows`, so `asciiverse/build.sh` links once more with
+  `-mconsole` in the generated `src/Makefile`). SDL2 and SDL2_mixer are static as
+  elsewhere, and `zorbash.exe` needs only Windows' own DLLs (should a later
+  MSYS2 bring one in, `asciiverse/stage.sh` puts it beside the exe).
+  OpenGL is the system's `opengl32.dll`, never called.
+- `asciiverse/smoke.py`: plays a built game in a 100x30 pseudo-terminal
+  (title screen, a new game's first level, the robot, Ctrl-C, exit 0),
+  with sound off and saves in a scratch folder. The Windows workflow runs
+  it in a ConPTY console from the unpacked zip, and under Wine.
 - `asciiverse/record-preview.py`, `asciiverse/zorbash.cast`: the catalog
   preview, 100x30: the title screen, the dungeon's map, then the game's own
   robot playing the first level.

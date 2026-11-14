@@ -36,6 +36,32 @@ ordinary SDL events. Game logic, widgets and the ascii map are untouched.
   moved into `ascii_cell_resolve()`, shared by both. The dump prints the same
   as before.
 
+## Windows
+
+`src/terminal.cpp` has `_WIN32` sections beside the POSIX ones, and nothing
+else changes for Windows:
+
+- **Output**: the same frames, written with `WriteConsoleW` after turning
+  on `ENABLE_VIRTUAL_TERMINAL_PROCESSING` (Windows 10 and later; without
+  it `--terminal` says so and exits). The size comes from the console
+  window, looked at again every quarter second as well as on its resize
+  events. Windows has no `wcwidth`, so a small one covers combining marks
+  and the wide East Asian ranges.
+- **Input**: `ReadConsoleInputW` records instead of escape sequences, with
+  line input, echo, Ctrl-C handling and quick edit off. Key records have
+  real releases, so keys behave as with the kitty protocol; each virtual
+  key remembers what it went down as, so its release always matches. The
+  typed character decides the key (any keyboard layout; AltGr is not
+  Ctrl + Alt), the keypad with num lock off reads as the keypad, and focus
+  loss lets go of held keys. Mouse records become the same button, motion
+  and wheel events as SGR reporting.
+- `main.cpp`: `flush_the_console()` does nothing in terminal mode, as the
+  console is the game's screen.
+
+We build it with MSYS2 UCRT64 and clang through your `RUNME`, linked as a
+console program: `-mconsole` and `-DSDL_MAIN_HANDLED` in place of SDL2main
+and `-mwindows` (`asciiverse/build.sh`).
+
 ## Hooks (all behind `g_opt_terminal`)
 
 - `main.cpp`: `--terminal` (implies `--ascii`), looked for before the log
