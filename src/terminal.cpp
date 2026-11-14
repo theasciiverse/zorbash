@@ -17,6 +17,11 @@
 // Both are pushed into SDL's queue as ordinary SDL events, and SDL's keyboard
 // and mouse state queries are answered from here.
 //
+// Windows (_WIN32): the same output, through the console's own escape
+// sequence support (Windows 10 and later). Keys, with real releases, and the
+// mouse come from the console's input records instead of escape sequences,
+// and go to the same handlers. Everything Windows has its own section below.
+//
 
 #include "my_array_bounds_check.hpp"
 #include "my_ascii.hpp"
@@ -35,13 +40,24 @@
 #include <cstring>
 #include <cwchar>
 #include <fcntl.h>
-#include <poll.h>
 #include <string>
-#include <sys/ioctl.h>
 #include <sys/stat.h>
-#include <termios.h>
 #include <time.h>
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <io.h>
+#include <windows.h>
+#else
+#include <poll.h>
+#include <sys/ioctl.h>
+#include <termios.h>
 #include <unistd.h>
+#endif
 
 bool g_opt_terminal;
 
@@ -49,8 +65,17 @@ static bool            term_started;
 static int             term_fd = -1;
 static int             term_saved_stderr = -1;
 static bool            term_redirected;
+#ifdef _WIN32
+static HANDLE          term_con_in  = INVALID_HANDLE_VALUE;
+static HANDLE          term_con_out = INVALID_HANDLE_VALUE;
+static DWORD           term_saved_in_mode;
+static DWORD           term_saved_out_mode;
+static int             term_win_left;
+static int             term_win_top;
+#else
 static bool            term_have_saved_termios;
 static struct termios  term_saved_termios;
+#endif
 static int             term_cols = 80;
 static int             term_rows = 24;
 static volatile bool   term_resized;
@@ -96,11 +121,57 @@ static const uint64_t TERM_ESC_WAIT_MS = 30;
 
 static uint64_t term_now_ms(void)
 {
+#ifdef _WIN32
+  return (uint64_t) GetTickCount64();
+#else
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
   return (uint64_t) ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+#endif
 }
 
+#ifdef _WIN32
+//
+// The console takes UTF-16 whatever its code page is
+//
+static void term_write(const std::string &s)
+{
+  if (s.empty()) {
+    return;
+  }
+  int n = MultiByteToWideChar(CP_UTF8, 0, s.data(), (int) s.size(), nullptr, 0);
+  if (n <= 0) {
+    return;
+  }
+  std::wstring w((size_t) n, L' ');
+  MultiByteToWideChar(CP_UTF8, 0, s.data(), (int) s.size(), &w[ 0 ], n);
+  const wchar_t *p = w.data();
+  DWORD          left = (DWORD) n;
+  while (left) {
+    DWORD done = 0;
+    if (! WriteConsoleW(term_con_out, p, left, &done, nullptr) || ! done) {
+      return;
+    }
+    p += done;
+    left -= done;
+  }
+}
+
+static void term_read_size(void)
+{
+  CONSOLE_SCREEN_BUFFER_INFO info;
+  if (GetConsoleScreenBufferInfo(term_con_out, &info)) {
+    int cols = info.srWindow.Right - info.srWindow.Left + 1;
+    int rows = info.srWindow.Bottom - info.srWindow.Top + 1;
+    if (cols > 0 && rows > 0) {
+      term_cols = cols;
+      term_rows = rows;
+    }
+    term_win_left = info.srWindow.Left;
+    term_win_top  = info.srWindow.Top;
+  }
+}
+#else
 static void term_write(const std::string &s)
 {
   const char *p = s.data();
@@ -128,6 +199,7 @@ static void term_read_size(void)
 }
 
 static void term_on_winch(int) { term_resized = true; }
+#endif
 
 bool terminal_take_layout_change(void)
 {
@@ -139,6 +211,13 @@ bool terminal_take_layout_change(void)
 int terminal_cols(void) { return std::min(term_cols, (int) TERM_WIDTH_MAX); }
 int terminal_rows(void) { return std::min(term_rows, (int) TERM_HEIGHT_MAX); }
 
+#ifdef _WIN32
+//
+// Windows always has APPDATA, which main.cpp uses before asking here; without
+// it, the game's own default (a folder beside it) stands.
+//
+std::string terminal_state_dir(void) { return ""; }
+#else
 //
 // mkdir -p
 //
@@ -171,7 +250,125 @@ std::string terminal_state_dir(void)
   term_mkdirs(dir);
   return dir;
 }
+#endif
 
+#ifdef _WIN32
+bool terminal_init(void)
+{
+  DWORD mode;
+  if (! GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &mode)
+      || ! GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &mode)) {
+    return false;
+  }
+
+  //
+  // Our own handles on the console, which stay put when stdout is sent
+  // elsewhere below
+  //
+  term_con_in  = CreateFileW(L"CONIN$", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                             OPEN_EXISTING, 0, nullptr);
+  term_con_out = CreateFileW(L"CONOUT$", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                             OPEN_EXISTING, 0, nullptr);
+  if (term_con_in == INVALID_HANDLE_VALUE || term_con_out == INVALID_HANDLE_VALUE) {
+    return false;
+  }
+
+  //
+  // Escape sequences: Windows 10 and later
+  //
+  GetConsoleMode(term_con_out, &term_saved_out_mode);
+  if (! SetConsoleMode(term_con_out, term_saved_out_mode | ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING)) {
+    return false;
+  }
+  SetConsoleMode(term_con_out, term_saved_out_mode);
+
+  //
+  // Everything else the game prints goes nowhere until its log files are
+  // open, then into them: the console shows only the game.
+  //
+  term_fd           = _dup(1);
+  term_saved_stderr = _dup(2);
+  fflush(stdout);
+  fflush(stderr);
+  int devnull = _open("NUL", _O_WRONLY);
+  if (devnull >= 0) {
+    _dup2(devnull, 1);
+    _dup2(devnull, 2);
+    _close(devnull);
+  }
+  term_redirected = true;
+  atexit(terminal_fini);
+
+  term_read_size();
+  return true;
+}
+
+void terminal_start(void)
+{
+  if (term_started) {
+    return;
+  }
+
+  //
+  // Keys and mouse as input records: no line editing, echo, Ctrl-C handling
+  // or quick edit selection
+  //
+  GetConsoleMode(term_con_in, &term_saved_in_mode);
+  SetConsoleMode(term_con_in, ENABLE_EXTENDED_FLAGS | ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT);
+  GetConsoleMode(term_con_out, &term_saved_out_mode);
+  SetConsoleMode(term_con_out,
+                 ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN);
+  FlushConsoleInputBuffer(term_con_in);
+
+  //
+  // Stray prints from the game go to its log files
+  //
+  if (g_log_stdout) {
+    fflush(stdout);
+    _dup2(_fileno(g_log_stdout), 1);
+  }
+  if (g_log_stderr) {
+    fflush(stderr);
+    _dup2(_fileno(g_log_stderr), 2);
+  }
+
+  //
+  // Input records tell of key releases, as the kitty protocol does
+  //
+  term_kitty_keys = true;
+  term_started    = true;
+
+  //
+  // Alternate screen, hide cursor, no autowrap
+  //
+  term_write("\x1b[?1049h\x1b[?25l\x1b[?7l\x1b[2J");
+
+  term_screen_valid = false;
+}
+
+void terminal_fini(void)
+{
+  if (term_redirected) {
+    term_redirected = false;
+    _dup2(term_fd, 1);
+    if (term_saved_stderr >= 0) {
+      _dup2(term_saved_stderr, 2);
+    }
+  }
+
+  if (! term_started) {
+    return;
+  }
+  term_started = false;
+
+  static const char reset[] = "\x1b[0m\x1b[?7h\x1b[?25h\x1b[?1049l";
+  DWORD             unused;
+  WriteConsoleA(term_con_out, reset, sizeof(reset) - 1, &unused, nullptr);
+
+  SetConsoleMode(term_con_out, term_saved_out_mode);
+  SetConsoleMode(term_con_in, term_saved_in_mode);
+}
+#else
 bool terminal_init(void)
 {
   if (! isatty(STDIN_FILENO) || ! isatty(STDOUT_FILENO)) {
@@ -287,6 +484,7 @@ void terminal_fini(void)
   int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
   fcntl(STDIN_FILENO, F_SETFL, flags & ~O_NONBLOCK);
 }
+#endif
 
 void terminal_remember_config(void)
 {
@@ -910,6 +1108,251 @@ static void term_parse_input(bool flush_lone_esc)
   term_in.erase(0, i);
 }
 
+//
+// After a resize: draw everything again, and lay the UI out again if the
+// grid changed size
+//
+static void term_take_resize(void)
+{
+  int old_cols = terminal_cols();
+  int old_rows = terminal_rows();
+  term_read_size();
+  term_screen_valid = false;
+  if (terminal_cols() != old_cols || terminal_rows() != old_rows) {
+    term_layout_changed = true;
+  }
+}
+
+#ifdef _WIN32
+////////////////////////////////////////////////////////////////////////////
+// Windows console input
+////////////////////////////////////////////////////////////////////////////
+
+//
+// The key and modifiers each held virtual key went down as, so its release
+// lets go of the same key whatever the modifiers are by then
+//
+static int      term_vk_key[ 256 ];
+static int      term_vk_mods[ 256 ];
+static DWORD    term_win_buttons;
+static uint64_t term_size_checked_at;
+
+static void term_win_release_all(void)
+{
+  for (int vk = 0; vk < 256; vk++) {
+    if (term_vk_key[ vk ]) {
+      term_key_event(term_vk_key[ vk ], term_vk_mods[ vk ], 3);
+      term_vk_key[ vk ] = 0;
+    }
+  }
+}
+
+static void term_win_key(const KEY_EVENT_RECORD &k)
+{
+  int vk = k.wVirtualKeyCode & 0xff;
+
+  if (! k.bKeyDown) {
+    if (term_vk_key[ vk ]) {
+      term_key_event(term_vk_key[ vk ], term_vk_mods[ vk ], 3);
+      term_vk_key[ vk ] = 0;
+    }
+    return;
+  }
+
+  DWORD st   = k.dwControlKeyState;
+  int   mods = 0;
+  if (st & SHIFT_PRESSED) {
+    mods |= 1;
+  }
+  if (st & (LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED)) {
+    mods |= 2;
+  }
+  if (st & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED)) {
+    mods |= 4;
+  }
+
+  //
+  // The arrows, Home, End and so on of the keypad, with num lock off, are
+  // the ones without the enhanced flag
+  //
+  bool kp  = ! (st & ENHANCED_KEY);
+  int  key = TK_NONE;
+  switch (vk) {
+    case VK_UP : key = kp ? KITTY_KP_UP : TK_UP; break;
+    case VK_DOWN : key = kp ? KITTY_KP_DOWN : TK_DOWN; break;
+    case VK_LEFT : key = kp ? KITTY_KP_LEFT : TK_LEFT; break;
+    case VK_RIGHT : key = kp ? KITTY_KP_RIGHT : TK_RIGHT; break;
+    case VK_HOME : key = kp ? KITTY_KP_HOME : TK_HOME; break;
+    case VK_END : key = kp ? KITTY_KP_END : TK_END; break;
+    case VK_PRIOR : key = kp ? KITTY_KP_PAGE_UP : TK_PAGEUP; break;
+    case VK_NEXT : key = kp ? KITTY_KP_PAGE_DOWN : TK_PAGEDOWN; break;
+    case VK_INSERT : key = kp ? KITTY_KP_INSERT : TK_INSERT; break;
+    case VK_DELETE : key = kp ? KITTY_KP_DELETE : TK_DELETE; break;
+    case VK_CLEAR : key = KITTY_KP_BEGIN; break;
+    case VK_RETURN : key = kp ? 13 : KITTY_KP_ENTER; break;
+    case VK_ESCAPE : key = 27; break;
+    case VK_TAB : key = 9; break;
+    case VK_BACK : key = 127; break;
+    case VK_SPACE : key = 32; break;
+    case VK_DECIMAL : key = KITTY_KP_DECIMAL; break;
+    case VK_DIVIDE : key = KITTY_KP_DIVIDE; break;
+    case VK_MULTIPLY : key = KITTY_KP_MULTIPLY; break;
+    case VK_SUBTRACT : key = KITTY_KP_SUBTRACT; break;
+    case VK_ADD : key = KITTY_KP_ADD; break;
+    default :
+      if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9) {
+        key = KITTY_KP_0 + (vk - VK_NUMPAD0);
+      } else if (vk >= VK_F1 && vk <= VK_F12) {
+        key = TK_F1 + (vk - VK_F1);
+      } else {
+        int c = k.uChar.UnicodeChar;
+        if (c >= 1 && c <= 26) {
+          //
+          // Ctrl + letter
+          //
+          key = 'a' + c - 1;
+          mods |= 4;
+        } else if (c >= 32) {
+          //
+          // The character typed, whatever the keyboard layout: it has shift
+          // in it already, and AltGr is not Ctrl + Alt
+          //
+          key = c;
+          mods &= ~1;
+          if ((st & RIGHT_ALT_PRESSED) && (st & LEFT_CTRL_PRESSED)) {
+            mods &= ~6;
+          }
+        } else if ((vk >= '0' && vk <= '9') || (vk >= 'A' && vk <= 'Z')) {
+          //
+          // Ctrl + digit and the like, which have no character
+          //
+          key = (vk >= 'A') ? vk - 'A' + 'a' : vk;
+        }
+      }
+      break;
+  }
+
+  if (key == TK_NONE) {
+    return;
+  }
+
+  int event = 1;
+  if (term_vk_key[ vk ]) {
+    if (term_vk_key[ vk ] == key && term_vk_mods[ vk ] == mods) {
+      event = 2;
+    } else {
+      term_key_event(term_vk_key[ vk ], term_vk_mods[ vk ], 3);
+    }
+  }
+  term_vk_key[ vk ]  = key;
+  term_vk_mods[ vk ] = mods;
+  term_key_event(key, mods, event);
+}
+
+//
+// Mouse records to the SGR button codes term_mouse_event takes
+//
+static void term_win_mouse(const MOUSE_EVENT_RECORD &m)
+{
+  int x = m.dwMousePosition.X - term_win_left + 1;
+  int y = m.dwMousePosition.Y - term_win_top + 1;
+
+  if (m.dwEventFlags & MOUSE_WHEELED) {
+    short d = (short) HIWORD(m.dwButtonState);
+    term_mouse_event(64 | (d > 0 ? 0 : 1), x, y, false);
+    return;
+  }
+  if (m.dwEventFlags & MOUSE_HWHEELED) {
+    short d = (short) HIWORD(m.dwButtonState);
+    term_mouse_event(64 | (d > 0 ? 3 : 2), x, y, false);
+    return;
+  }
+
+  //
+  // Left, middle, right
+  //
+  static const DWORD bits[ 3 ] = {FROM_LEFT_1ST_BUTTON_PRESSED, FROM_LEFT_2ND_BUTTON_PRESSED,
+                                  RIGHTMOST_BUTTON_PRESSED};
+  DWORD              now       = m.dwButtonState & (bits[ 0 ] | bits[ 1 ] | bits[ 2 ]);
+  bool               changed   = false;
+  for (int b = 0; b < 3; b++) {
+    if ((now ^ term_win_buttons) & bits[ b ]) {
+      term_mouse_event(b, x, y, ! (now & bits[ b ]));
+      changed = true;
+    }
+  }
+  term_win_buttons = now;
+
+  if (! changed) {
+    term_mouse_event(32 | 3, x, y, false);
+  }
+}
+
+void terminal_wait(int ms)
+{
+  if (term_con_in == INVALID_HANDLE_VALUE) {
+    Sleep((DWORD) ms);
+    return;
+  }
+  WaitForSingleObject(term_con_in, (DWORD) ms);
+}
+
+void terminal_poll(void)
+{
+  if (! term_started) {
+    return;
+  }
+
+  for (;;) {
+    DWORD pending = 0;
+    if (! GetNumberOfConsoleInputEvents(term_con_in, &pending) || ! pending) {
+      break;
+    }
+    INPUT_RECORD rec[ 64 ];
+    DWORD        got = 0;
+    if (! ReadConsoleInputW(term_con_in, rec, 64, &got) || ! got) {
+      break;
+    }
+    for (DWORD i = 0; i < got; i++) {
+      switch (rec[ i ].EventType) {
+        case KEY_EVENT : term_win_key(rec[ i ].Event.KeyEvent); break;
+        case MOUSE_EVENT : term_win_mouse(rec[ i ].Event.MouseEvent); break;
+        case WINDOW_BUFFER_SIZE_EVENT : term_resized = true; break;
+        case FOCUS_EVENT :
+          //
+          // Releases made in another window never reach us
+          //
+          if (! rec[ i ].Event.FocusEvent.bSetFocus) {
+            term_win_release_all();
+          }
+          break;
+        default : break;
+      }
+    }
+  }
+
+  //
+  // Not every console reports every resize: look now and then as well
+  //
+  uint64_t now = term_now_ms();
+  if (now - term_size_checked_at >= 250) {
+    term_size_checked_at = now;
+    int cols             = term_cols;
+    int rows             = term_rows;
+    term_read_size();
+    if (cols != term_cols || rows != term_rows) {
+      term_cols    = cols;
+      term_rows    = rows;
+      term_resized = true;
+    }
+  }
+
+  if (term_resized) {
+    term_resized = false;
+    term_take_resize();
+  }
+}
+#else
 void terminal_wait(int ms)
 {
   struct pollfd pfd;
@@ -949,20 +1392,40 @@ void terminal_poll(void)
   term_release_expired_keys();
 
   if (term_resized) {
-    term_resized  = false;
-    int old_cols  = terminal_cols();
-    int old_rows  = terminal_rows();
-    term_read_size();
-    term_screen_valid = false;
-    if (terminal_cols() != old_cols || terminal_rows() != old_rows) {
-      term_layout_changed = true;
-    }
+    term_resized = false;
+    term_take_resize();
   }
 }
+#endif
 
 ////////////////////////////////////////////////////////////////////////////
 // Output
 ////////////////////////////////////////////////////////////////////////////
+
+#ifdef _WIN32
+//
+// Windows has no wcwidth: zero width for combining marks and the like, two
+// for the wide East Asian ranges, one for the rest (the game's own glyphs)
+//
+static int term_wcwidth(wchar_t ch)
+{
+  unsigned c = (unsigned) ch;
+  if ((c >= 0x0300 && c <= 0x036f) || (c >= 0x1ab0 && c <= 0x1aff) || (c >= 0x1dc0 && c <= 0x1dff)
+      || (c >= 0x200b && c <= 0x200f) || (c >= 0x20d0 && c <= 0x20ff) || (c >= 0xd800 && c <= 0xdfff)
+      || (c >= 0xfe00 && c <= 0xfe0f) || (c >= 0xfe20 && c <= 0xfe2f)) {
+    return 0;
+  }
+  if ((c >= 0x1100 && c <= 0x115f) || (c >= 0x2e80 && c <= 0x303e) || (c >= 0x3041 && c <= 0x33ff)
+      || (c >= 0x3400 && c <= 0x4dbf) || (c >= 0x4e00 && c <= 0x9fff) || (c >= 0xa000 && c <= 0xa4cf)
+      || (c >= 0xac00 && c <= 0xd7a3) || (c >= 0xf900 && c <= 0xfaff) || (c >= 0xfe30 && c <= 0xfe4f)
+      || (c >= 0xff00 && c <= 0xff60) || (c >= 0xffe0 && c <= 0xffe6)) {
+    return 2;
+  }
+  return 1;
+}
+#else
+static int term_wcwidth(wchar_t ch) { return wcwidth(ch); }
+#endif
 
 static void term_put_utf8(std::string &out, wchar_t ch)
 {
@@ -1047,7 +1510,7 @@ void terminal_display(void)
       if (ch < 32 || ch == 127) {
         ch = ' ';
       } else if (ch >= 127) {
-        int cw = wcwidth(ch);
+        int cw = term_wcwidth(ch);
         if (cw == 0 || cw == 2) {
           ch = '?';
         }

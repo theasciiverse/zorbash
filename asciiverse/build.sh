@@ -16,6 +16,10 @@
 #     binary needs no OpenGL library: terminal mode never calls one. macOS
 #     links the system's OpenGL framework, present on every Mac and likewise
 #     never called. Run on the runner with CC_ARCH set to x86_64 or arm64.
+#     Windows links the system's opengl32.dll the same way; run in MSYS2's
+#     UCRT64 shell (as upstream builds for Windows), with the packages
+#     .github/workflows/release.yml installs. The game is a console program
+#     there (-mconsole, no SDL2main), playing in the console it starts in.
 # A small sdl2-config (avbuild/bin) tells RUNME where SDL is and adds
 # -DZORBASH_TERMINAL_ONLY.
 set -eu
@@ -65,8 +69,18 @@ fi
 export PKG_CONFIG_PATH="$prefix/lib/pkgconfig"
 sdl_cflags=$(pkg-config --cflags sdl2 | sed 's/-D_REENTRANT//')
 sdl_libs=$(pkg-config --static --libs SDL2_mixer sdl2)
+case "$(uname)" in
+  MINGW*) windows=1 ;;
+  *) windows="" ;;
+esac
 glstub=""
-if [ "$(uname)" != Darwin ]; then
+extra_cflags=""
+if [ -n "$windows" ]; then
+  # a console program with its own main(), not SDL's windowed one
+  sdl_cflags=$(echo "$sdl_cflags" | sed 's/-Dmain=SDL_main//')
+  sdl_libs=$(echo " $sdl_libs " | sed -e 's/ -mwindows / -mconsole /' -e 's/ -lSDL2main / /')
+  extra_cflags=" -DSDL_MAIN_HANDLED"
+elif [ "$(uname)" != Darwin ]; then
   sh "$root/asciiverse/glstubs.sh" "$root/src" "$deps/lib"
   glstub="-L$deps/lib"
 fi
@@ -75,21 +89,22 @@ fi
 cat > "$deps/bin/sdl2-config" <<EOF
 #!/bin/sh
 case "\$1" in
-  --cflags) echo "$sdl_cflags -DZORBASH_TERMINAL_ONLY${CC_ARCH:+ -arch $CC_ARCH}" ;;
+  --cflags) echo "$sdl_cflags -DZORBASH_TERMINAL_ONLY$extra_cflags${CC_ARCH:+ -arch $CC_ARCH}" ;;
   --libs) echo "$glstub $sdl_libs${CC_ARCH:+ -arch $CC_ARCH}" ;;
   *) exit 1 ;;
 esac
 EOF
 chmod +x "$deps/bin/sdl2-config"
 
-rm -f "$root/zorbash"
+exe=zorbash${windows:+.exe}
+rm -f "$root/$exe"
 PATH="$deps/bin:$PATH" ./RUNME --rel --github || true
-if [ ! -f zorbash ] && [ "$(uname)" != Darwin ]; then
+if [ ! -f "$exe" ] && [ "$(uname)" != Darwin ] && [ -z "$windows" ]; then
   # a GL call the source scan missed: take the names the objects need, link again
   sh "$root/asciiverse/glstubs.sh" "$root/src" "$deps/lib" "$root/.o"
   PATH="$deps/bin:$PATH" USE_PRECOMPILED=yep make -f build/Makefile -j "$jobs" all
 fi
-test -f zorbash
-file zorbash
-strip zorbash
-ls -l zorbash
+test -f "$exe"
+file "$exe"
+strip "$exe"
+ls -l "$exe"

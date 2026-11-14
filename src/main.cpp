@@ -789,6 +789,9 @@ void flush_the_console(void)
   // Easier to see progress on windows where there is no console
   //
 #ifdef _WIN32
+  if (g_opt_terminal) {
+    return; // the console is the game's screen, and not drawn on before the start
+  }
   wid_visible(wid_console_window);
   sdl_flush_display(true);
 #endif

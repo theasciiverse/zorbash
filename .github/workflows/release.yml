@@ -1,11 +1,11 @@
 # Builds Zorbash's terminal edition for the Asciiverse catalog and as system
 # packages.
 #
-# For av: one archive per target, named zorbash-<target>.tar.gz, plus a
-# SHA256SUMS file, attached to a GitHub release (hub/catalog/SCHEMA.md,
-# release.source = "github"). Each archive holds the one binary (all the
-# game's pictures, sounds and music are built in), the licence, readme,
-# PATCHES.md and UPSTREAM.md.
+# For av: one archive per target, named zorbash-<target>.tar.gz (.zip on
+# Windows), plus a SHA256SUMS file, attached to a GitHub release
+# (hub/catalog/SCHEMA.md, release.source = "github"). Each archive holds the
+# one binary (all the game's pictures, sounds and music are built in), the
+# licence, readme, PATCHES.md and UPSTREAM.md.
 # For everyone else: .deb, .rpm and Arch packages from the same Linux build,
 # made by nfpm (asciiverse/nfpm.yaml).
 #
@@ -14,8 +14,8 @@
 # made in ubuntu:22.04 (SDL loads the system's sound library at run time);
 # macOS builds both architectures on one runner. SDL2 and SDL2_mixer are
 # built from source without video and linked statically everywhere
-# (asciiverse/build.sh). No Windows build: the terminal backend reads the
-# terminal through POSIX (termios, poll), which Windows does not have.
+# (asciiverse/build.sh). Windows (x86_64-pc-windows-gnu) is built with
+# MSYS2 and tested in a Windows console by windows.yml, called from here.
 
 name: release
 
@@ -110,8 +110,13 @@ jobs:
           name: ${{ matrix.target }}
           path: dist/*
 
+  windows:
+    uses: ./.github/workflows/windows.yml
+    with:
+      ref: ${{ inputs.tag || github.ref_name }}
+
   release:
-    needs: [linux, macos]
+    needs: [linux, macos, windows]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
@@ -129,5 +134,5 @@ jobs:
         run: |
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
             || gh release create "$TAG" -R "$GITHUB_REPOSITORY" --title "Zorbash $TAG" \
-                 --notes "Zorbash ${TAG%%-av.*}, the terminal edition, built for the Asciiverse catalog, with .deb, .rpm and Arch packages. See PATCHES.md and UPSTREAM.md."
+                 --notes "Zorbash ${TAG%%-av.*}, the terminal edition, built for the Asciiverse catalog: Linux, macOS and Windows, with .deb, .rpm and Arch packages. See PATCHES.md and UPSTREAM.md."
           gh release upload "$TAG" dist/* -R "$GITHUB_REPOSITORY" --clobber

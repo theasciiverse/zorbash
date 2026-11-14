@@ -1,0 +1,115 @@
+# Builds and tests Zorbash's terminal edition for Windows: the console
+# backend (src/terminal.cpp, the _WIN32 sections) built with MSYS2's UCRT64
+# clang, as upstream builds for Windows (asciiverse/build.sh), staged as
+# zorbash-x86_64-pc-windows-gnu.zip (zorbash.exe, the few MSYS2 DLLs it
+# links, licence and notes), then played by asciiverse/smoke.py:
+#   - on Windows, in a ConPTY console of 100x30, run from the unpacked
+#     folder with nothing else on PATH;
+#   - under Wine on Linux, in a Unix pty (informative: Wine's console is not
+#     Windows', so this one may fail without the build being at fault).
+# Called by release.yml for a tag; runs on its own on pushes that touch the
+# backend or the packaging, and by hand.
+
+name: windows
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+  workflow_dispatch:
+  push:
+    branches: ["asciiverse", "windows"]
+    paths:
+      - "src/terminal.cpp"
+      - "src/my_terminal.hpp"
+      - "asciiverse/**"
+      - ".github/workflows/windows.yml"
+
+env:
+  ID: zorbash
+  TARGET: x86_64-pc-windows-gnu
+
+jobs:
+  build:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git make file zip
+            mingw-w64-ucrt-x86_64-clang
+            mingw-w64-ucrt-x86_64-lld
+            mingw-w64-ucrt-x86_64-binutils
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-gettext-runtime
+            mingw-w64-ucrt-x86_64-zlib
+            mingw-w64-ucrt-x86_64-SDL2_mixer
+
+      - name: Build
+        env:
+          CMAKE_GENERATOR: Ninja
+        run: |
+          JOBS=4 sh asciiverse/build.sh || { tail -n 80 build.log 2>/dev/null; exit 1; }
+          ldd zorbash.exe
+
+      - name: Package
+        run: |
+          sh asciiverse/stage.sh
+          mkdir -p dist
+          (cd stage && zip -qr "../dist/$ID-$TARGET.zip" .)
+          ls -l dist
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Smoke test in a Windows console (ConPTY)
+        shell: pwsh
+        run: |
+          pip install pywinpty
+          New-Item -ItemType Directory -Force unpacked | Out-Null
+          Expand-Archive "dist/$env:ID-$env:TARGET.zip" -DestinationPath unpacked
+          $env:PATH = "C:\Windows\System32;C:\Windows"
+          & "$env:pythonLocation\python.exe" asciiverse/smoke.py unpacked\zorbash.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.TARGET }}
+          path: dist/*
+
+  wine:
+    needs: build
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          sparse-checkout: asciiverse
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.TARGET }}
+          path: dist
+
+      - name: Smoke test under Wine
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq wine64 wine >/dev/null
+          wine --version
+          mkdir unpacked && cd unpacked && unzip -q "../dist/$ID-$TARGET.zip" && cd ..
+          timeout 300 python3 asciiverse/smoke.py wine unpacked/zorbash.exe
