@@ -121,8 +121,13 @@ steps.append("title screen")
 time.sleep(1.5)
 send("n")
 time.sleep(3.0)
-send("\r")
-if not wait_for([b"Welcome to the lair", b"Welcome"], 60):
+# the dungeon's levels are still being made for a while after n, and Enter
+# counts only once they are: press it until the first level shows
+for _ in range(30):
+    send("\r")
+    if wait_for([b"Welcome to the lair", b"Welcome"], 4):
+        break
+else:
     fail("no first level after n, Enter")
 steps.append("first level")
 time.sleep(1.0)
