@@ -104,6 +104,14 @@ if [ ! -f "$exe" ] && [ "$(uname)" != Darwin ] && [ -z "$windows" ]; then
   sh "$root/asciiverse/glstubs.sh" "$root/src" "$deps/lib" "$root/.o"
   PATH="$deps/bin:$PATH" USE_PRECOMPILED=yep make -f build/Makefile -j "$jobs" all
 fi
+if [ -n "$windows" ]; then
+  # upstream links Windows as a windowed program (-mwindows, in
+  # build/build.sh); link again as a console one, which terminal mode needs
+  sed -i 's/ -mwindows / -mconsole /' src/.Makefile
+  rm -f "$exe"
+  PATH="$deps/bin:$PATH" USE_PRECOMPILED=yep make -f build/Makefile -j "$jobs" all
+  file "$exe" | grep -q console
+fi
 test -f "$exe"
 file "$exe"
 strip "$exe"

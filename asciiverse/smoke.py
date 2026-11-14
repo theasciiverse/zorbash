@@ -100,7 +100,7 @@ def wait_for(texts, seconds):
 
 
 def fail(why):
-    print("FAIL:", why)
+    print("FAIL:", why, "(running)" if alive() else "(exited, code %s)" % code())
     with lock:
         tail = bytes(seen[-3000:])
     print("last output:", tail.decode("utf-8", "replace").encode("ascii", "backslashreplace").decode())
